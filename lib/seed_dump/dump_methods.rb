@@ -23,7 +23,9 @@ class SeedDump
       # We select only string attribute names to avoid conflict
       # with the composite_primary_keys gem (it returns composite
       # primary key attribute names as hashes).
-      record.attributes.select {|key| key.is_a?(String) }.each do |attribute, value|
+
+      record.class.column_names.each do |attribute|
+        value = record.send(attribute)
         attribute_strings << dump_attribute_new(attribute, value) unless options[:exclude].include?(attribute.to_sym)
       end
 
@@ -37,16 +39,33 @@ class SeedDump
     def value_to_s(value)
       value = case value
               when BigDecimal
-                value.to_s
+                value.to_s.inspect
               when Date, Time, DateTime
-                value.to_s(:db)
+                value.to_s(:db).inspect
               when Range
                 range_to_string(value)
               else
-                value
+                if value.class.ancestors.include?(CarrierWave::Uploader::Base)
+                  # Copy file to migration folder
+                  if value.present?
+                    return copy_file_to_assets_folder(value.path)
+                  else
+                    nil.inspect
+                  end
+                else
+                  value.inspect
+                end
               end
+    end
 
-      value.inspect
+    def copy_file_to_assets_folder(from)
+      return nil.inspect unless File.exist?(from)
+      name = File.basename(from)
+      dest_folder =  Rails.root.join('db', 'assets')
+      FileUtils.mkdir_p(dest_folder, verbose: true)
+      dest_file = dest_folder.join(name)
+      FileUtils.cp(from, dest_file, verbose:  true)
+      return "File.open(\"#{dest_file}\")"
     end
 
     def range_to_string(object)
@@ -80,7 +99,11 @@ class SeedDump
         io.write(",\n  ") unless last_batch
       end
 
-      io.write("\n])\n")
+      if options[:without_protection]
+        io.write("\n], without_protection: true)\n")
+      else
+        io.write("\n])\n")
+      end
 
       if options[:file].present?
         nil

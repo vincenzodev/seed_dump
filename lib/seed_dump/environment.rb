@@ -10,7 +10,8 @@ class SeedDump
                  ActiveRecord::Base.descendants.select do |model|
                    (model.to_s != 'ActiveRecord::SchemaMigration') && \
                     model.table_exists? && \
-                    model.exists?
+                    model.exists? && \
+                    model.superclass == ActiveRecord::Base
                  end
                end
 
@@ -20,10 +21,11 @@ class SeedDump
         model = model.limit(env['LIMIT'].to_i) if env['LIMIT']
 
         SeedDump.dump(model,
+                      without_protection: ((env['WITHOUT_PROTECTION'] =~ /(true|t|yes|y|1)$/i) == 0),
                       append: append,
                       batch_size: (env['BATCH_SIZE'] ? env['BATCH_SIZE'].to_i : nil),
                       exclude: (env['EXCLUDE'] ? env['EXCLUDE'].split(',').map {|e| e.strip.to_sym} : nil),
-                      file: (env['FILE'] || 'db/seeds.rb'))
+                      file: (env['FILE'] || 'db/seeds_backups.rb'))
 
         append = true
       end
